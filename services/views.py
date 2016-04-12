@@ -134,7 +134,12 @@ def activate_forum(request):
     # Valid now we get the main characters
     character = EveManager.get_character_by_id(authinfo.main_char_id)
     logger.debug("Adding phpbb user for user %s with main character %s" % (request.user, character))
-    result = Phpbb3Manager.add_user(character.character_name, request.user.email, ['REGISTERED'], authinfo.main_char_id)
+    groups = []
+    for group in request.user.groups.all():
+        groups.append(str(group.name))
+    if len(groups) == 0:
+        groups.append('empty')
+    result = Phpbb3Manager.add_user(character.character_name, request.user.email, groups, authinfo.main_char_id)
     # if empty we failed
     if result[0] != "":
         AuthServicesInfoManager.update_user_forum_info(result[0], result[1], request.user)
