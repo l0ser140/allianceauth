@@ -66,7 +66,7 @@ class Phpbb3Manager:
 
     @staticmethod
     def __santatize_username(username):
-        sanatized = sanatized.replace("'", "\\'")
+        sanatized = username.replace("'", "\\'")
         return sanatized()
 
     @staticmethod
