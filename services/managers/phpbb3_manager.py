@@ -16,11 +16,11 @@ class Phpbb3Manager:
                    r"user_password, user_email, group_id, user_regdate, user_permissions, " \
                    r"user_sig) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
 
-    SQL_DEL_USER = r"DELETE FROM phpbb_users where username = %s"
+    SQL_DEL_USER = r"DELETE FROM phpbb_users where username_clean = %s"
 
-    SQL_DIS_USER = r"UPDATE phpbb_users SET user_email= %s, user_password=%s WHERE username = %s"
+    SQL_DIS_USER = r"UPDATE phpbb_users SET user_email= %s, user_password=%s, username=%s WHERE username_clean = %s"
 
-    SQL_USER_ID_FROM_USERNAME = r"SELECT user_id from phpbb_users WHERE username = %s"
+    SQL_USER_ID_FROM_USERNAME = r"SELECT user_id from phpbb_users WHERE username_clean = %s"
 
     SQL_ADD_USER_GROUP = r"INSERT INTO phpbb_user_group (group_id, user_id, user_pending) VALUES (%s, %s, %s)"
 
@@ -28,7 +28,7 @@ class Phpbb3Manager:
 
     SQL_ADD_GROUP = r"INSERT INTO phpbb_groups (group_name,group_desc,group_legend) VALUES (%s,%s,0)"
 
-    SQL_UPDATE_USER_PASSWORD = r"UPDATE phpbb_users SET user_password = %s WHERE username = %s"
+    SQL_UPDATE_USER_PASSWORD = r"UPDATE phpbb_users SET user_password = %s WHERE username_clean = %s"
 
     SQL_REMOVE_USER_GROUP = r"DELETE FROM phpbb_user_group WHERE user_id=%s AND group_id=%s "
 
@@ -66,9 +66,8 @@ class Phpbb3Manager:
 
     @staticmethod
     def __santatize_username(username):
-        sanatized = username.replace(" ", "_")
-        sanatized = sanatized.replace("'", "")
-        return sanatized.lower()
+        sanatized = sanatized.replace("'", "\\'")
+        return sanatized()
 
     @staticmethod
     def __get_group_id(groupname):
@@ -156,18 +155,19 @@ class Phpbb3Manager:
         logger.debug("Adding phpbb user with username %s, email %s, groups %s, characterid %s" % (username, email, groups, characterid))
         cursor = connections['phpbb3'].cursor()
 
-        username_clean = Phpbb3Manager.__santatize_username(username)
+        username_santatized = Phpbb3Manager.__santatize_username(username)
+        username_clean = username_santatized.lower()
         password = Phpbb3Manager.__generate_random_pass()
         pwhash = Phpbb3Manager.__gen_hash(password)
         logger.debug("Proceeding to add phpbb user %s and pwhash starting with %s" % (username_clean, pwhash[0:5]))
         # check if the username was simply revoked
         if Phpbb3Manager.check_user(username_clean):
             logger.warn("Unable to add phpbb user with username %s - already exists. Updating user instead." % username)
-            Phpbb3Manager.__update_user_info(username_clean, email, pwhash)
+            Phpbb3Manager.__update_user_info(username_clean, username_santatized, email, pwhash)
         else:
             try:
 
-                cursor.execute(Phpbb3Manager.SQL_ADD_USER, [username_clean, username_clean, pwhash,
+                cursor.execute(Phpbb3Manager.SQL_ADD_USER, [username_santatized, username_clean, pwhash,
                                                             email, 2, Phpbb3Manager.__get_current_utc_date(),
                                                             "", ""])
                 Phpbb3Manager.update_groups(username_clean, groups)
@@ -276,12 +276,12 @@ class Phpbb3Manager:
         return ""
 
     @staticmethod
-    def __update_user_info(username, email, password):
-        logger.debug("Updating phpbb user %s info: username %s password of length %s" % (username, email, len(password)))
+    def __update_user_info(username_clean, username_santatized, email, password):
+        logger.debug("Updating phpbb user %s info: username %s password of length %s" % (username_clean, email, len(password)))
         cursor = connections['phpbb3'].cursor()
         try:
-            cursor.execute(Phpbb3Manager.SQL_DIS_USER, [email, password, username])
-            logger.info("Updated phpbb user %s info" % username)
+            cursor.execute(Phpbb3Manager.SQL_DIS_USER, [email, password, username_santatized, username_clean])
+            logger.info("Updated phpbb user %s info" % username_clean)
         except:
-            logger.exception("Unable to update phpbb user %s info." % username)
+            logger.exception("Unable to update phpbb user %s info." % username_clean)
             pass
