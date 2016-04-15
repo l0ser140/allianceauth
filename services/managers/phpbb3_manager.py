@@ -184,7 +184,7 @@ class Phpbb3Manager:
                     logger.warn("The same pair username:character %s:%s already exists.  Updating instead." % (username_clean, character_name))
                     Phpbb3Manager.__update_user_info(username_clean, character_name, email, pwhash)
                 else:
-                    Phpbb3Manager.disable_user(username_clean)
+                    Phpbb3Manager.disable_user(username_clean, True)
                     Phpbb3Manager.__update_char_info(username_clean, character_name, email, pwhash)
             else:
                 Phpbb3Manager.__update_char_info(username_clean, character_name, email, pwhash)
@@ -206,21 +206,24 @@ class Phpbb3Manager:
         return username_clean, password
 
     @staticmethod
-    def disable_user(username):
+    def disable_user(username, change_username=False):
         logger.debug("Disabling phpbb user %s" % username)
         cursor = connections['phpbb3'].cursor()
 
         username_clean = Phpbb3Manager.__clean_username(username)
         password = Phpbb3Manager.__gen_hash(Phpbb3Manager.__generate_random_pass())
-        random_user = Phpbb3Manager.__generate_random_pass()
+        if change_username:
+            new_user = Phpbb3Manager.__generate_random_pass()
+        else:
+            new_user = username_clean
         revoke_email = "revoked@" + settings.DOMAIN
         try:
             pwhash = Phpbb3Manager.__gen_hash(password)
             userid = Phpbb3Manager.__get_user_id(username_clean)
             if userid:
                 Phpbb3Manager.update_groups(username_clean, [])
-                logger.debug("Disabling phpbb user %s using fake user %s" % (username_clean, random_user))
-                cursor.execute(Phpbb3Manager.SQL_DIS_USER, [random_user, revoke_email, pwhash, username_clean])
+                logger.debug("Disabling phpbb user %s using username %s" % (username_clean, new_user))
+                cursor.execute(Phpbb3Manager.SQL_DIS_USER, [new_user, revoke_email, pwhash, username_clean])
                 cursor.execute(Phpbb3Manager.SQL_DEL_AUTOLOGIN, [userid])
                 cursor.execute(Phpbb3Manager.SQL_DEL_SESSION, [userid])
                 logger.info("Disabled phpbb user %s" % username_clean)
@@ -299,9 +302,12 @@ class Phpbb3Manager:
         pwhash = Phpbb3Manager.__gen_hash(password)
         if Phpbb3Manager.check_character(character_name):
             username_old = Phpbb3Manager.__get_user_by_char(character_name)
-            Phpbb3Manager.disable_user(username_clean)
-            Phpbb3Manager.__update_char_info(username_clean, character_name, email, pwhash)
-            Phpbb3Manager.__add_avatar(username_clean, characterid)
+            if username_old != username_clean:
+                if Phpbb3Manager.check_user(username_clean):
+                    Phpbb3Manager.disable_user(username_clean, True)
+                Phpbb3Manager.disable_user(username_old, True)
+                Phpbb3Manager.__update_char_info(username_clean, character_name, email, pwhash)
+                Phpbb3Manager.__add_avatar(username_clean, characterid)
         else:
             cursor = connections['phpbb3'].cursor()
             try:
