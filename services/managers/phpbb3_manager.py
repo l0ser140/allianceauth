@@ -26,7 +26,7 @@ class Phpbb3Manager:
 
     SQL_USER_ID_FROM_USERNAME = r"SELECT user_id from phpbb_users WHERE username_clean = %s"
 
-    SQL_USER_ID_FROM_CHARACTER = r"SELECT user_id from phpbb_users WHERE username = %s"
+    SQL_USER_FROM_CHARACTER = r"SELECT username_clean from phpbb_users WHERE username = %s"
 
     SQL_ADD_USER_GROUP = r"INSERT INTO phpbb_user_group (group_id, user_id, user_pending) VALUES (%s, %s, %s)"
 
@@ -97,16 +97,16 @@ class Phpbb3Manager:
             return None
 
     @staticmethod
-    def __get_user_id_by_char(character):
-        logger.debug("Getting phpbb3 user id for character %s" % character)
+    def __get_user_by_char(character):
+        logger.debug("Getting phpbb3 user for character %s" % character)
         cursor = connections['phpbb3'].cursor()
-        cursor.execute(Phpbb3Manager.SQL_USER_ID_FROM_CHARACTER, [character])
+        cursor.execute(Phpbb3Manager.SQL_USER_FROM_CHARACTER, [character])
         row = cursor.fetchone()
         if row is not None:
-            logger.debug("Got phpbb user id %s for character %s" % (row[0], character))
+            logger.debug("Got phpbb user %s for character %s" % (row[0], character))
             return row[0]
         else:
-            logger.error("Character %s not found on phpbb. Unable to determine user id." % character)
+            logger.error("Character %s not found on phpbb. Unable to determine user." % character)
             return None
 
     @staticmethod
@@ -180,7 +180,7 @@ class Phpbb3Manager:
         # check if the username was simply revoked
         if Phpbb3Manager.check_character(character_name):
             if Phpbb3Manager.check_user(username_clean):
-                if Phpbb3Manager.__get_user_id(username_clean) == Phpbb3Manager.__get_user_id_by_char(character_name):
+                if username_clean == Phpbb3Manager.__get_user_by_char(character_name):
                     logger.warn("The same pair username:character %s:%s already exists.  Updating instead." % (username_clean, character_name))
                     Phpbb3Manager.__update_user_info(username_clean, character_name, email, pwhash)
                 else:
@@ -273,7 +273,7 @@ class Phpbb3Manager:
     def check_character(character):
         logger.debug("Checking phpbb character %s" % character)
         cursor = connections['phpbb3'].cursor()
-        cursor.execute(Phpbb3Manager.SQL_USER_ID_FROM_CHARACTER, [character])
+        cursor.execute(Phpbb3Manager.SQL_USER_FROM_CHARACTER, [character])
         row = cursor.fetchone()
         if row:
             logger.debug("Found character %s on phpbb" % character)
@@ -294,16 +294,23 @@ class Phpbb3Manager:
         return False
 
     @staticmethod
-    def update_user_main_char(username, character_name, characterid):
-        cursor = connections['phpbb3'].cursor()
+    def update_user_main_char(username, character_name, characterid, email, password):
         username_clean = Phpbb3Manager.__clean_username(username)
-        try:
-            cursor.execute(Phpbb3Manager.SQL_UPD_CHAR, [character_name, username_clean])
-            logger.info("Updated phpbb user %s main character to %s" % (username_clean, character_name))
+        pwhash = Phpbb3Manager.__gen_hash(password)
+        if Phpbb3Manager.check_character(character_name):
+            username_old = Phpbb3Manager.__get_user_by_char(character_name)
+            Phpbb3Manager.disable_user(username_clean)
+            Phpbb3Manager.__update_char_info(username_clean, character_name, email, pwhash)
             Phpbb3Manager.__add_avatar(username_clean, characterid)
-        except:
-            logger.exception("Unable to update phpbb user %s main character to %s" % (username_clean, character_name))
-            pass
+        else:
+            cursor = connections['phpbb3'].cursor()
+            try:
+                cursor.execute(Phpbb3Manager.SQL_UPD_CHAR, [character_name, username_clean])
+                logger.info("Updated phpbb user %s main character to %s" % (username_clean, character_name))
+                Phpbb3Manager.__add_avatar(username_clean, characterid)
+            except:
+                logger.exception("Unable to update phpbb user %s main character to %s" % (username_clean, character_name))
+                pass
 
 
     @staticmethod

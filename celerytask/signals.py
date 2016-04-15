@@ -44,6 +44,7 @@ def post_save_main_char(sender, instance, *args, **kwargs):
     if auth.forum_username:
         logger.debug("Received post_save from %s" % instance)
         update_forum_main_char(instance.pk)
+        update_forum_groups.delay(instance.pk)
 
 def trigger_all_ts_update():
     for auth in AuthServicesInfo.objects.filter(teamspeak3_uid__isnull=False):
