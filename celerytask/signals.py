@@ -7,6 +7,7 @@ import logging
 from .tasks import update_jabber_groups
 from .tasks import update_mumble_groups
 from .tasks import update_forum_groups
+from .tasks import update_forum_main_char
 from .tasks import update_ipboard_groups
 from .tasks import update_discord_groups
 from .tasks import update_teamspeak3_groups
@@ -36,6 +37,13 @@ def m2m_changed_user_groups(sender, instance, action, *args, **kwargs):
             update_discord_groups.delay(instance.pk)
         if auth.mumble_username:
             update_mumble_groups.delay(instance.pk)
+
+@receiver(post_save, sender=AuthServicesInfo)
+def post_save_main_char(sender, instance, *args, **kwargs):
+    auth, c = AuthServicesInfo.objects.get_or_create(user=instance)
+    if auth.forum_username:
+        logger.debug("Received post_save from %s" % instance)
+        update_forum_main_char(instance.pk)
 
 def trigger_all_ts_update():
     for auth in AuthServicesInfo.objects.filter(teamspeak3_uid__isnull=False):

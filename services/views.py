@@ -137,14 +137,11 @@ def activate_forum(request):
     groups = []
     for group in request.user.groups.all():
         groups.append(str(group.name))
-    if len(groups) == 0:
-        groups.append('empty')
-    result = Phpbb3Manager.add_user(character.character_name, request.user.email, groups, authinfo.main_char_id)
+    result = Phpbb3Manager.add_user(request.user.username, character.character_name, request.user.email, groups, authinfo.main_char_id)
     # if empty we failed
     if result[0] != "":
         AuthServicesInfoManager.update_user_forum_info(result[0], result[1], request.user)
-        logger.debug("Updated authserviceinfo for user %s with forum credentials. Updating groups." % request.user)
-        update_forum_groups.delay(request.user.pk)
+        logger.debug("Updated authserviceinfo for user %s with forum credentials." % request.user)
         logger.info("Succesfully activated forum for user %s" % request.user)
         return HttpResponseRedirect("/services/")
     logger.error("Unsuccesful attempt to activate forum for user %s" % request.user)
