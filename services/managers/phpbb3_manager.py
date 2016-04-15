@@ -43,7 +43,7 @@ class Phpbb3Manager:
     SQL_GET_USER_GROUPS = r"SELECT phpbb_groups.group_name FROM phpbb_groups , phpbb_user_group WHERE " \
                           r"phpbb_user_group.group_id = phpbb_groups.group_id AND user_id=%s"
 
-    SQL_ADD_USER_AVATAR = r"UPDATE phpbb_users SET user_avatar_type=2, user_avatar_width=64, user_avatar_height=64, user_avatar=%s WHERE user_id = %s"
+    SQL_ADD_USER_AVATAR = r"UPDATE phpbb_users SET user_avatar_type=2, user_avatar_width=128, user_avatar_height=128, user_avatar=%s WHERE user_id = %s"
     
     SQL_CLEAR_USER_PERMISSIONS = r"UPDATE phpbb_users SET user_permissions = '' WHERE user_Id = %s"
 
