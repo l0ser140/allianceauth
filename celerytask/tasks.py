@@ -91,20 +91,6 @@ def update_mumble_groups(pk):
     logger.debug("Updated user %s mumble groups." % user)
 
 @task
-def update_forum_main_char(pk):
-    user = User.objects.get(pk=pk)
-    logger.debug("Updating forum main char for user %s" % user)
-    authserviceinfo = AuthServicesInfo.objects.get(user=user)
-    character = EveManager.get_character_by_id(authserviceinfo.main_char_id)
-    logger.debug("Updating user %s forum main char to %s" % (user, character))
-    try:
-        Phpbb3Manager.update_user_main_char(authserviceinfo.forum_username, character, authserviceinfo.main_char_id, user.email, authserviceinfo.forum_password)
-    except:
-        logger.exception("Phpbb main char sync failed for %s, retrying in 10 mins" % user)
-        raise self.retry(countdown = 60 * 10)
-    logger.debug("Updated user %s forum groups." % user)
-
-@task
 def update_forum_groups(pk):
     user = User.objects.get(pk=pk)
     logger.debug("Updating forum groups for user %s" % user)
@@ -117,6 +103,21 @@ def update_forum_groups(pk):
         Phpbb3Manager.update_groups(authserviceinfo.forum_username, groups)
     except:
         logger.exception("Phpbb group sync failed for %s, retrying in 10 mins" % user)
+        raise self.retry(countdown = 60 * 10)
+    logger.debug("Updated user %s forum groups." % user)
+
+@task
+def update_forum_main_char(pk):
+    user = User.objects.get(pk=pk)
+    logger.debug("Updating forum main char for user %s" % user)
+    authserviceinfo = AuthServicesInfo.objects.get(user=user)
+    character = EveManager.get_character_by_id(authserviceinfo.main_char_id)
+    logger.debug("Updating user %s forum main char to %s" % (user, character))
+    try:
+        Phpbb3Manager.update_user_main_char(authserviceinfo.forum_username, character, authserviceinfo.main_char_id, user.email, authserviceinfo.forum_password)
+        update_forum_groups(pk)
+    except:
+        logger.exception("Phpbb main char sync failed for %s, retrying in 10 mins" % user)
         raise self.retry(countdown = 60 * 10)
     logger.debug("Updated user %s forum groups." % user)
 
