@@ -387,6 +387,8 @@ MUMBLE_SERVER_ID = int(os.environ.get('AA_MUMBLE_SERVER_ID', '1'))
 # TEAMSPEAK3_VIRTUAL_SERVER - Virtual server id
 # TEAMSPEAK3_AUTHED_GROUP_ID - Default authed group id
 # TEAMSPEAK3_PUBLIC_URL - teamspeak3 public url used for link creation
+# TEAMSPEAK3_NICKNAME_PATTERN - pattern for teamspeak3 nicknames. You can use %(CORP)s and %(NAME)s
+# TEAMSPEAK3_NICKNAME_CONTROL - usernames with wrong nicknames would be kicked
 ######################################
 TEAMSPEAK3_SERVER_IP = os.environ.get('AA_TEAMSPEAK3_SERVER_IP', '127.0.0.1')
 TEAMSPEAK3_SERVER_PORT = int(os.environ.get('AA_TEAMSPEAK3_SERVER_PORT', '10011'))
@@ -394,6 +396,8 @@ TEAMSPEAK3_SERVERQUERY_USER = os.environ.get('AA_TEAMSPEAK3_SERVERQUERY_USER', '
 TEAMSPEAK3_SERVERQUERY_PASSWORD = os.environ.get('AA_TEAMSPEAK3_SERVERQUERY_PASSWORD', 'passwordhere')
 TEAMSPEAK3_VIRTUAL_SERVER = int(os.environ.get('AA_TEAMSPEAK3_VIRTUAL_SERVER', '1'))
 TEAMSPEAK3_PUBLIC_URL = os.environ.get('AA_TEAMSPEAK3_PUBLIC_URL', 'yourdomain.com')
+TEAMSPEAK3_NICKNAME_PATTERN =  os.environ.get('AA_TEAMSPEAK3_NICKNAME_PATTERN', '[%(CORP)s] %(NAME)s')
+TEAMSPEAK3_NICKNAME_CONTROL = 'True' == os.environ.get('AA_TEAMSPEAK3_NICKNAME_CONTROL', 'True')
 
 ######################################
 # Discord Configuration

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db.models.signals import m2m_changed
 from django.db.models.signals import post_save
 from django.db.models.signals import post_delete
@@ -11,11 +12,15 @@ from .tasks import update_forum_main_char
 from .tasks import update_ipboard_groups
 from .tasks import update_discord_groups
 from .tasks import update_teamspeak3_groups
+from .tasks import update_teamspeak3_main_char
 from .tasks import update_smf_groups
 from authentication.models import AuthServicesInfo
 from services.models import AuthTS
 
 logger = logging.getLogger(__name__)
+
+def is_teamspeak3_active():
+    return settings.ENABLE_AUTH_TEAMSPEAK3 or settings.ENABLE_BLUE_TEAMSPEAK3
 
 @receiver(m2m_changed, sender=User.groups.through)
 def m2m_changed_user_groups(sender, instance, action, *args, **kwargs):
@@ -39,11 +44,14 @@ def m2m_changed_user_groups(sender, instance, action, *args, **kwargs):
             update_mumble_groups.delay(instance.pk)
 
 @receiver(post_save, sender=AuthServicesInfo)
-def post_save_main_char(sender, instance, *args, **kwargs):
-    auth, c = AuthServicesInfo.objects.get_or_create(user=instance)
-    if auth.forum_username:
-        logger.debug("Received post_save from %s" % instance)
-        update_forum_main_char.delay(instance.pk)
+def post_save_main_char(sender, instance, update_fields, *args, **kwargs):
+    logger.debug("Received post_save from %s" % instance)
+    if 'main_char_id' in update_fields:
+        auth, c = AuthServicesInfo.objects.get_or_create(user=instance)
+        if auth.forum_username:
+            update_forum_main_char.delay(instance.pk)
+        if is_teamspeak3_active():
+            update_teamspeak3_main_char.delay(instance.pk)
 
 def trigger_all_ts_update():
     for auth in AuthServicesInfo.objects.filter(teamspeak3_uid__isnull=False):

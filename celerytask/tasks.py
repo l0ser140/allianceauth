@@ -122,6 +122,21 @@ def update_forum_main_char(pk):
     logger.debug("Updated user %s forum groups." % user)
 
 @task
+def update_teamspeak3_main_char(pk):
+    user = User.objects.get(pk=pk)
+    logger.debug("Updating ts3 main char for user %s" % user)
+    authserviceinfo = AuthServicesInfo.objects.get(user=user)
+    character = EveManager.get_character_by_id(authserviceinfo.main_char_id)
+    logger.debug("Updating ts3 %s forum main char to %s" % (user, character))
+    try:
+        ts_username = Teamspeak3Manager.generate_username(character.character_name, character.corporation_ticker)
+        AuthServicesInfoManager.update_user_teamspeak3_username(ts_username, user)
+    except:
+        logger.exception("Phpbb main char sync failed for %s, retrying in 10 mins" % user)
+        raise self.retry(countdown = 60 * 10)
+    logger.debug("Updated user %s forum groups." % user)
+
+@task
 def update_smf_groups(pk):
     user = User.objects.get(pk=pk)
     logger.debug("Updating smf groups for user %s" % user)
@@ -711,3 +726,9 @@ def run_ts3_group_update():
     if is_teamspeak3_active():
         logger.debug("TS3 installed. Syncing local group objects.")
         Teamspeak3Manager._sync_ts_group_db()
+
+@periodic_task(run_every=crontab(minute="*/5"))
+def run_ts3_nickname_check():
+    if is_teamspeak3_active() and settings.TEAMSPEAK3_NICKNAME_CONTROL:
+        logger.debug("TS3 installed. Start nicknames checking.")
+        Teamspeak3Manager._nicknames_check()

@@ -20,9 +20,9 @@ def disable_teamspeak():
             logger.info("Clearing %s Teamspeak3 UID" % auth.user)
             auth.teamspeak3_uid = ''
             auth.save()
-        if auth.teamspeak3_perm_key:
+        if auth.teamspeak3_username:
             logger.info("Clearing %s Teamspeak3 permission key" % auth.user)
-            auth.teamspeak3_perm_key = ''
+            auth.teamspeak3_username = ''
             auth.save()
     logger.info("Deleting all UserTSgroup models")
     UserTSgroup.objects.all().delete()

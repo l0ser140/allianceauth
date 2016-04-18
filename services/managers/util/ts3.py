@@ -94,7 +94,7 @@ class TS3Proto():
 
         cstr = [command]
 
-        # Add the keys and values, escape as needed        
+        # Add the keys and values, escape as needed
         if keys:
             for key in keys:
                 if isinstance(keys[key], list):
@@ -139,7 +139,7 @@ class TS3Proto():
                     v = [v[0], '='.join(v[1:])]
                 key, value = v
                 keys[key] = self._unescape_str(value)
-            elif (not v == ['']): 
+            elif (not v == ['']):
                 if v[0][0] and v[0][0] == '-':
                     # Option
                     opts.append(v[0][1:])

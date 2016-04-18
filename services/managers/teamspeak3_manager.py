@@ -2,11 +2,14 @@ from django.conf import settings
 
 from services.managers.util.ts3 import TS3Server
 from services.models import TSgroup
+from authentication.managers import AuthServicesInfoManager
+
 import logging
 
 logger = logging.getLogger(__name__)
 
 class Teamspeak3Manager:
+
     def __init__(self):
         pass
 
@@ -19,24 +22,14 @@ class Teamspeak3Manager:
         return server
 
     @staticmethod
-    def __santatize_username(username):
-        sanatized = username.replace(" ", "_")
-        sanatized = sanatized.replace("'", "-")
-        return sanatized
-
-    @staticmethod
-    def __generate_username(username, corp_ticker):
-        return "[" + corp_ticker + "]" + username
-
-    @staticmethod
-    def __generate_username_blue(username, corp_ticker):
-        return "[BLUE][" + corp_ticker + "]" + username
+    def generate_username(username, corp_ticker):
+        return settings.TEAMSPEAK3_NICKNAME_PATTERN % {'CORP': corp_ticker, 'NAME': username}
 
     @staticmethod
     def _get_userid(uid):
         logger.debug("Looking for uid %s on TS3 server." % uid)
         server = Teamspeak3Manager.__get_created_server()
-        ret = server.send_command('customsearch', {'ident': 'sso_uid', 'pattern': uid})
+        ret = server.send_command('clientdbfind', keys={'pattern': uid}, opts={'uid'})
         if ret and 'keys' in ret and 'cldbid' in ret['keys']:
             logger.debug("Got userid %s for uid %s" % (ret['keys']['cldbid'], uid))
             return ret['keys']['cldbid']
@@ -164,60 +157,64 @@ class Teamspeak3Manager:
             pass
 
     @staticmethod
-    def add_user(username, corp_ticker):
-        username_clean = Teamspeak3Manager.__santatize_username(Teamspeak3Manager.__generate_username(username,
-                                                               corp_ticker))
-        server = Teamspeak3Manager.__get_created_server()
-        token = ""
-        logger.debug("Adding user to TS3 server with cleaned username %s" % username_clean)
-        server_groups = Teamspeak3Manager._group_list()
-
-        if not settings.DEFAULT_AUTH_GROUP in server_groups:
-            Teamspeak3Manager._create_group(settings.DEFAULT_AUTH_GROUP)
-
-        alliance_group_id = Teamspeak3Manager._group_id_by_name(settings.DEFAULT_AUTH_GROUP)
-
-        ret = server.send_command('tokenadd', {'tokentype': 0, 'tokenid1': alliance_group_id, 'tokenid2': 0,
-                                               'tokendescription': username_clean,
-                                               'tokencustomset': "ident=sso_uid value=%s" % username_clean})
-
+    def _nicknames_check():
+        logger.debug("_nicknames_check function called.")
         try:
-            if 'keys' in ret:
-                if 'token' in ret['keys']:
-                    token = ret['keys']['token']
-        except:
-            pass
-        logger.info("Created permission token for user %s on TS3 server" % username_clean)
+            server = Teamspeak3Manager.__get_created_server()
+            response = server.send_command('clientlist', opts={'uid'})
+            logger.debug("Got ts3 userlist %s" % str(response))
+            ts_users=[]
+            if len(response) > 0:
+                for item in response:
+                    ts_users.append({'clid': item['keys']['clid'],
+                                     'client_unique_identifier': item['keys']['client_unique_identifier'],
+                                     'client_nickname': item['keys']['client_nickname']})
 
-        return username_clean, token
+                auth_list = AuthServicesInfoManager.get_registered_in_ts3()
+                for user in ts_users:
+                    for auth in auth_list:
+                        if user['client_unique_identifier'] == auth.teamspeak3_uid:
+                            #detect wrong username
+                            if user['client_nickname'] != auth.teamspeak3_username:
+                                server.send_command('clientkick', {'clid': user['clid'], 'reasonid': 5,
+                                            'reasonmsg': 'Wrong username. Expecting: %s' % auth.teamspeak3_username})
+                        else:
+                            #detect using registered username
+                            if user['client_nickname'] == auth.teamspeak3_username:
+                                server.send_command('clientkick', {'clid': user['clid'], 'reasonid': 5,
+                                            'reasonmsg': 'Username registered for another unique identifier'})
+        except:
+            logger.exception("An unhandled exception has occured while TS nicknames check.")
+            pass
 
     @staticmethod
-    def add_blue_user(username, corp_ticker):
-        username_clean = Teamspeak3Manager.__santatize_username(Teamspeak3Manager.__generate_username_blue(username,
-                                                                    corp_ticker))
+    def add_user(username, corp_ticker):
+        username = Teamspeak3Manager.generate_username(username, corp_ticker)
+        uid = ""
+
         server = Teamspeak3Manager.__get_created_server()
-        token = ""
-        logger.debug("Adding user to TS3 server with cleaned username %s" % username_clean)
-        server_groups = Teamspeak3Manager._group_list()
-        if not settings.DEFAULT_BLUE_GROUP in server_groups:
-            Teamspeak3Manager._create_group(settings.DEFAULT_BLUE_GROUP)
-
-        blue_group_id = Teamspeak3Manager._group_id_by_name(settings.DEFAULT_BLUE_GROUP)
-
-        ret = server.send_command('tokenadd', {'tokentype': 0, 'tokenid1': blue_group_id, 'tokenid2': 0,
-                                               'tokendescription': username_clean,
-                                               'tokencustomset': "ident=sso_uid value=%s" % username_clean})
+        logger.debug("Search for user on TS3 server with username %s" % username)
+        response = server.send_command('clientlist', opts={'uid'})
 
         try:
-            if 'keys' in ret:
-                if 'token' in ret['keys']:
-                    token = ret['keys']['token']
-
+            if len(response) > 0:
+                ts_user = filter(lambda person : person['keys']['client_nickname'] == username, response)
+                if ts_user:
+                    logger.debug("User %s found on TS3 server" % username)
+                    ts_user = ts_user[0]['keys']
+                    uid = ts_user['client_unique_identifier']
+                    auth_exist = AuthServicesInfoManager.get_auth_service_info_by_teamspeak3(uid)
+                    if auth_exist:
+                        AuthServicesInfoManager.update_user_teamspeak3_info("", "", auth_exist.user)
+                        logger.info("UID already registered for another user. Deactivating it. %s" % auth_exist.user)
+                else:
+                    logger.debug("User %s not found on TS3 server" % username)
+                    return False, "User %s not found on TS3 server! Join the server before activate." % username
         except:
-            pass
-        logger.info("Created permission token for blue user %s on TS3 server" % username_clean)
+            logger.exception("Unable to add ts3 user %s" % username)
+            return False, "Unable to add ts3 user %s"
 
-        return username_clean, token
+        return True, username, uid
 
     @staticmethod
     def delete_user(uid):
@@ -230,33 +227,67 @@ class Teamspeak3Manager:
                     logger.debug("Found user %s on TS3 server - issuing deletion command." % user)
                     server.send_command('clientkick', {'clid': client['keys']['clid'], 'reasonid': 5,
                                                        'reasonmsg': 'Auth service deleted'})
-
-            ret = server.send_command('clientdbdelete', {'cldbid': user})
-            if ret == '0':
-                logger.info("Deleted user with id %s from TS3 server." % uid)
-                return True
+            Teamspeak3Manager.update_groups(uid, {})
+            return True
         else:
             logger.warn("User with id %s not found on TS3 server. Assuming succesful deletion." % uid)
             return True
 
     @staticmethod
-    def check_user_exists(uid):
-        if Teamspeak3Manager._get_userid(uid):
-            return True
+    def reactivate(username, corp_ticker, uid_old):
+        username = Teamspeak3Manager.generate_username(username, corp_ticker)
+        uid = ""
 
-        return False
+        server = Teamspeak3Manager.__get_created_server()
+        logger.debug("Search for user on TS3 server with username %s" % username)
+        response = server.send_command('clientlist', opts={'uid'})
+
+        try:
+            if len(response) > 0:
+                ts_user = filter(lambda person : person['keys']['client_nickname'] == username, response)
+                if ts_user:
+                    logger.debug("User %s found on TS3 server" % username)
+                    ts_user = ts_user[0]['keys']
+                    uid = ts_user['client_unique_identifier']
+                    if uid != uid_old:
+                        logger.info("Deactivating old UID %s" % uid_old)
+                        Teamspeak3Manager.delete_user(uid_old)
+
+                    auth_exist = AuthServicesInfoManager.get_auth_service_info_by_teamspeak3(uid)
+                    if auth_exist:
+                        AuthServicesInfoManager.update_user_teamspeak3_info("", "", auth_exist.user)
+                        logger.info("UID already registered for another user. Deactivating it. %s" % auth_exist.user)
+
+                else:
+                    logger.debug("User %s not found on TS3 server" % username)
+                    return False, "User %s not found on TS3 server! Join the server before reactivate." % username
+        except:
+            logger.exception("Unable to reactivate ts3 user %s" % username)
+            return False, "Unable to reactivate ts3 user %s"
+
+        return True, username, uid
 
     @staticmethod
-    def generate_new_permissionkey(uid, username, corpticker):
-        logger.debug("Re-issuing permission key for user id %s" % uid)
-        Teamspeak3Manager.delete_user(uid)
-        return Teamspeak3Manager.add_user(username, corpticker)
+    def kick_username(username):
+        server = Teamspeak3Manager.__get_created_server()
+        logger.debug("Trying to kick user %s from TS3 server." % username)
+        response = server.send_command('clientlist')
+        try:
+            if len(response) > 0:
+                ts_user = filter(lambda person : person['keys']['client_nickname'] == username, response)
+                if ts_user:
+                    server.send_command('clientkick', {'clid': ts_user[0]['keys']['clid'], 'reasonid': 5,
+                                                       'reasonmsg': 'Auth service kick request'})
+                    logger.debug("User %s succesfully kicked." % username)
+                    return True, "User %s succesfully kicked." % username
+                else:
+                    logger.debug("User %s not found on server." % username)
+                    return False, "User %s not found on server." % username
 
-    @staticmethod
-    def generate_new_blue_permissionkey(uid, username, corpticker):
-        logger.debug("Re-issuing blue permission key for user id %s" % uid)
-        Teamspeak3Manager.delete_user(uid)
-        return Teamspeak3Manager.add_blue_user(username, corpticker)
+        except:
+            logger.exception("Unable to kick ts3 user %s" % username)
+            return False, "Unable to kick ts3 user %s" % username
+
 
     @staticmethod
     def update_groups(uid, ts_groups):

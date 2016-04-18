@@ -31,6 +31,22 @@ class AuthServicesInfoManager:
         return None
 
     @staticmethod
+    def get_auth_service_info_by_teamspeak3(uid):
+        if AuthServicesInfo.objects.filter(teamspeak3_uid=uid).exists():
+            logger.debug("Returning existing authservicesinfo model for teampeak uid %s" % uid)
+            return AuthServicesInfo.objects.get(teamspeak3_uid=uid)
+        logger.debug("Failed to get authservicesinfo object for teamspeak uid %s: uid does not exist." % uid)
+        return None
+
+    @staticmethod
+    def get_registered_in_ts3():
+        if AuthServicesInfo.objects.exclude(teamspeak3_uid__isnull=True).exclude(teamspeak3_uid='').exists():
+            logger.debug("Returning existing authservicesinfo model for registered in ts3")
+            return AuthServicesInfo.objects.exclude(teamspeak3_uid__isnull=True).exclude(teamspeak3_uid='')
+        logger.debug("Failed to get authservicesinfo object for registered in ts3")
+        return None
+
+    @staticmethod
     def update_main_char_Id(char_id, user):
         if User.objects.filter(username=user.username).exists():
             logger.debug("Updating user %s main character to id %s" % (user, char_id))
@@ -91,14 +107,25 @@ class AuthServicesInfoManager:
             logger.error("Failed to update user %s ipboard info: user does not exist." % user)
 
     @staticmethod
-    def update_user_teamspeak3_info(uid, perm_key, user):
+    def update_user_teamspeak3_info(username, uid, user):
         if User.objects.filter(username=user.username).exists():
-            logger.debug("Updating user %s teamspeak3 info: uid %s" % (user, uid))
+            logger.debug("Updating user %s teamspeak3 info: uid %s username %s" % (user, uid, username))
             authserviceinfo = AuthServicesInfoManager.__get_or_create(user)
             authserviceinfo.teamspeak3_uid = uid
-            authserviceinfo.teamspeak3_perm_key = perm_key
-            authserviceinfo.save(update_fields=['teamspeak3_uid', 'teamspeak3_perm_key'])
+            authserviceinfo.teamspeak3_username = username
+            authserviceinfo.save(update_fields=['teamspeak3_uid', 'teamspeak3_username'])
             logger.info("Updated user %s teamspeak3 info in authservicesinfo model." % user)
+        else:
+            logger.error("Failed to update user %s teamspeak3 info: user does not exist." % user)
+
+    @staticmethod
+    def update_user_teamspeak3_username(username, user):
+        if User.objects.filter(username=user.username).exists():
+            logger.debug("Updating user %s teamspeak3 info: username %s" % (user, username))
+            authserviceinfo = AuthServicesInfoManager.__get_or_create(user)
+            authserviceinfo.teamspeak3_username = username
+            authserviceinfo.save(update_fields=['teamspeak3_username'])
+            logger.info("Updated user %s teamspeak3 username in authservicesinfo model." % user)
         else:
             logger.error("Failed to update user %s teamspeak3 info: user does not exist." % user)
 

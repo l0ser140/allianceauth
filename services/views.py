@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.decorators import permission_required
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.models import Group
+from django.contrib import messages
 
 from eveonline.models import EveCharacter
 from authentication.models import AuthServicesInfo
@@ -117,7 +118,6 @@ def jabber_broadcast_view(request):
 def services_view(request):
     logger.debug("services_view called by user %s" % request.user)
     authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
-
     return render_to_response('registered/services.html', {'authinfo': authinfo},
                               context_instance=RequestContext(request))
 
@@ -335,43 +335,20 @@ def activate_teamspeak3(request):
     logger.debug("activate_teamspeak3 called by user %s" % request.user)
     authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
     character = EveManager.get_character_by_id(authinfo.main_char_id)
-    if check_if_user_has_permission(request.user, "blue_member"):
-        logger.debug("Adding TS3 user for blue user %s with main character %s" % (request.user, character))
-        result = Teamspeak3Manager.add_blue_user(character.character_name, character.corporation_ticker)
-    else:
-        logger.debug("Adding TS3 user for user %s with main character %s" % (request.user, character))
-        result = Teamspeak3Manager.add_user(character.character_name, character.corporation_ticker)
 
-    # if its empty we failed
-    if result[0] is not "":
-        AuthServicesInfoManager.update_user_teamspeak3_info(result[0], result[1], request.user)
+    logger.debug("Adding TS3 user for user %s with main character %s" % (request.user, character))
+    result = Teamspeak3Manager.add_user(character.character_name, character.corporation_ticker)
+
+    if result[0]:
+        AuthServicesInfoManager.update_user_teamspeak3_info(result[1], result[2], request.user)
+        update_teamspeak3_groups.delay(request.user.pk)
         logger.debug("Updated authserviceinfo for user %s with TS3 credentials. Updating groups." % request.user)
         logger.info("Succesfully activated TS3 for user %s" % request.user)
-        return HttpResponseRedirect("/verify_teamspeak3/")
+        messages.success(request, "Teamspeak3 service activated successfully!")
+        return HttpResponseRedirect("/services/")
     logger.error("Unsuccessful attempt to activate TS3 for user %s" % request.user)
-    return HttpResponseRedirect("/dashboard")
-
-@login_required
-@user_passes_test(service_blue_alliance_test)
-def verify_teamspeak3(request):
-    logger.debug("verify_teamspeak3 called by user %s" % request.user)
-    authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
-    if not authinfo.teamspeak3_uid:
-        logger.warn("Unable to validate user %s teamspeak: no teamspeak data" % request.user)
-        return HttpResponseRedirect("/services")
-    if request.method == "POST":
-        form = TeamspeakJoinForm(request.POST)
-        if form.is_valid():
-            update_teamspeak3_groups.delay(request.user.pk)
-            logger.debug("Validated user %s joined TS server")
-            return HttpResponseRedirect("/services/")
-    else:
-        form = TeamspeakJoinForm({'username':authinfo.teamspeak3_uid})
-    context = {
-        'form': form,
-        'authinfo': authinfo,
-    }
-    return render_to_response('registered/teamspeakjoin.html', context, context_instance=RequestContext(request))
+    messages.error(request, result[1])
+    return HttpResponseRedirect("/services/")
 
 @login_required
 @user_passes_test(service_blue_alliance_test)
@@ -384,9 +361,27 @@ def deactivate_teamspeak3(request):
     if result:
         AuthServicesInfoManager.update_user_teamspeak3_info("", "", request.user)
         logger.info("Succesfully deactivated TS3 for user %s" % request.user)
+        messages.warning(request, "Teamspeak3 service deactivated successfully.")
         return HttpResponseRedirect("/services/")
     logger.error("Unsuccessful attempt to deactivate TS3 for user %s" % request.user)
-    return HttpResponseRedirect("/")
+    messages.error(request, "Unsuccessful attempt to deactivateTeamspeak3 service!")
+    return HttpResponseRedirect("/services/")
+
+@login_required
+@user_passes_test(service_blue_alliance_test)
+def kick_from_teamspeak3(request):
+    logger.debug("kick_from_teamspeak3 called by user %s" % request.user)
+    authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
+
+    logger.debug("Kick TS3 user for user %s with main ts3_username %s" % (request.user, authinfo.teamspeak3_username))
+    result = Teamspeak3Manager.kick_username(authinfo.teamspeak3_username)
+    if result[0]:
+        logger.debug("%s succesfully kicked from TS3 for user %s" % (authinfo.teamspeak3_username, request.user))
+        messages.warning(request, result[1])
+        return HttpResponseRedirect("/services/")
+    logger.debug("Unsuccessful attempt to kick %s from TS3 for user %s" % (authinfo.teamspeak3_username, request.user))
+    messages.error(request, result[1])
+    return HttpResponseRedirect("/services/")
 
 
 @login_required
@@ -395,27 +390,20 @@ def reset_teamspeak3_perm(request):
     logger.debug("reset_teamspeak3_perm called by user %s" % request.user)
     authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
     character = EveManager.get_character_by_id(authinfo.main_char_id)
-    logger.debug("Deleting TS3 user for user %s" % request.user)
-    Teamspeak3Manager.delete_user(authinfo.teamspeak3_uid)
 
-    if check_if_user_has_permission(request.user, "blue_member"):
-        logger.debug("Generating new permission key for blue user %s with main character %s" % (request.user, character))
-        result = Teamspeak3Manager.generate_new_blue_permissionkey(authinfo.teamspeak3_uid, character.character_name,
-                                                                   character.corporation_ticker)
-    else:
-        logger.debug("Generating new permission key for user %s with main character %s" % (request.user, character))
-        result = Teamspeak3Manager.generate_new_permissionkey(authinfo.teamspeak3_uid, character.character_name,
-                                                              character.corporation_ticker)
+    logger.debug("Adding TS3 user for user %s with main character %s" % (request.user, character))
+    result = Teamspeak3Manager.reactivate(character.character_name, character.corporation_ticker, authinfo.teamspeak3_uid)
 
-    # if blank we failed
-    if result != "":
-        AuthServicesInfoManager.update_user_teamspeak3_info(result[0], result[1], request.user)
+    if result[0]:
+        AuthServicesInfoManager.update_user_teamspeak3_info(result[1], result[2], request.user)
+        update_teamspeak3_groups.delay(request.user.pk)
         logger.debug("Updated authserviceinfo for user %s with TS3 credentials. Updating groups." % request.user)
-        update_teamspeak3_groups.delay(request.user)
-        logger.info("Successfully reset TS3 permission key for user %s" % request.user)
+        logger.info("Succesfully activated TS3 for user %s" % request.user)
+        messages.success(request, "Teamspeak3 service activated successfully!")
         return HttpResponseRedirect("/services/")
-    logger.error("Unsuccessful attempt to reset TS3 permission key for user %s" % request.user)
-    return HttpResponseRedirect("/")
+    logger.error("Unsuccessful attempt to activate TS3 for user %s" % request.user)
+    messages.error(request, result[1])
+    return HttpResponseRedirect("/services/")
 
 @login_required
 def fleet_fits(request):

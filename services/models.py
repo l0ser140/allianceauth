@@ -10,7 +10,7 @@ class TSgroup(models.Model):
 
     def __str__(self):
         return self.ts_group_name
-	
+
 class AuthTS(models.Model):
     auth_group = models.ForeignKey('auth.Group')
     ts_group = models.ManyToManyField(TSgroup)
