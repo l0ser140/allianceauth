@@ -46,12 +46,13 @@ def m2m_changed_user_groups(sender, instance, action, *args, **kwargs):
 @receiver(post_save, sender=AuthServicesInfo)
 def post_save_main_char(sender, instance, update_fields, *args, **kwargs):
     logger.debug("Received post_save from %s" % instance)
-    if 'main_char_id' in update_fields:
-        auth, c = AuthServicesInfo.objects.get_or_create(user=instance)
-        if auth.forum_username:
-            update_forum_main_char.delay(instance.pk)
-        if is_teamspeak3_active():
-            update_teamspeak3_main_char.delay(instance.pk)
+    if update_fields:
+        if 'main_char_id' in update_fields:
+            auth, c = AuthServicesInfo.objects.get_or_create(user=instance)
+            if auth.forum_username:
+                update_forum_main_char.delay(instance.pk)
+            if is_teamspeak3_active():
+                update_teamspeak3_main_char.delay(instance.pk)
 
 def trigger_all_ts_update():
     for auth in AuthServicesInfo.objects.filter(teamspeak3_uid__isnull=False):

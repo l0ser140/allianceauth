@@ -197,12 +197,16 @@ class Phpbb3Manager:
 
                     cursor.execute(Phpbb3Manager.SQL_ADD_USER, [character_name, username_clean, pwhash, email, 2,
                                                                 Phpbb3Manager.__get_current_utc_date(), "", ""])
-                    Phpbb3Manager.update_groups(username_clean, groups)
-                    Phpbb3Manager.__add_avatar(username_clean, characterid)
                     logger.info("Added phpbb user %s" % username_clean)
                 except:
                     logger.exception("Unable to add phpbb user %s" % username_clean)
                     pass
+        try:
+            Phpbb3Manager.update_groups(username_clean, groups)
+            Phpbb3Manager.__add_avatar(username_clean, characterid)
+        except:
+            logger.exception("Unable to update forum groups for phpbb user %s" % username_clean)
+            pass
         return username_clean, password
 
     @staticmethod
