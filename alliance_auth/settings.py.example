@@ -15,6 +15,8 @@ import os
 
 import djcelery
 
+from django.contrib.messages import constants as messages
+
 djcelery.setup_loader()
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -573,4 +575,9 @@ LOGGING = {
             'level': 'ERROR',
         },
     }
+}
+
+# needed to make this work with bootstrap labels
+MESSAGE_TAGS = {
+    messages.ERROR: 'danger'
 }
