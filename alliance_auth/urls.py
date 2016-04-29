@@ -136,6 +136,10 @@ urlpatterns = patterns('',
                        url(r'^activate_discord/$', 'services.views.activate_discord', name='auth_activate_discord'),
                        url(r'^deactivate_discord/$', 'services.views.deactivate_discord', name='auth_deactivate_discord'),
                        url(r'^reset_discord/$', 'services.views.reset_discord', name='auth_reset_discord'),
+                       
+                       # Discourse Service Control
+                       url(r'^activate_discourse/$', 'services.views.activate_discourse', name='auth_activate_discourse'),
+                       url(r'^deactivate_discourse/$', 'services.views.deactivate_discourse', name='auth_deactivate_discourse'),
 
                        # IPS4 Service Control
                        url(r'^activate_ips4/$', 'services.views.activate_ips4',
@@ -159,6 +163,13 @@ urlpatterns = patterns('',
                        url(r'^reset_market_password/$', 'services.views.reset_market_password',
                            name='auth_reset_market_password'),
                        url(r'^set_market_password/$', 'services.views.set_market_password', name='auth_set_market_password'),
+
+                       # Pathfinder Control
+                       url(r'^activate_pathfinder/$', 'services.views.activate_pathfinder', name='auth_activate_pathfinder'),
+                       url(r'^deactivate_pathfinder/$', 'services.views.deactivate_pathfinder', name='auth_deactivate_pathfinder'),
+                       url(r'^reset_pathfinder_password/$', 'services.views.reset_pathfinder_password',
+                           name='auth_reset_pathfinder_password'),
+                       url(r'^set_pathfinder_password/$', 'services.views.set_pathfinder_password', name='auth_set_pathfinder_password'),
 
                        # Tools
                        url(r'^tool/fleet_formatter_tool/$', 'services.views.fleet_formatter_view',
@@ -200,6 +211,13 @@ urlpatterns = patterns('',
 
                        # FLEET FITTINGS
                        url(r'^fits/$', 'services.views.fleet_fits', name='auth_fleet_fits'),
+                       #Fleetup
+                       url(r'^fleetup/$', 'fleetup.views.fleetup_view', name='auth_fleetup_view'),
+                       url(r'^fleetup/fittings/$', 'fleetup.views.fleetup_fittings', name='auth_fleetup_fittings'),
+                       url(r'^fleetup/fittings/(?P<fittingnumber>[0-9]+)/$', 'fleetup.views.fleetup_fitting'),
+                       url(r'^fleetup/doctrines/$', 'fleetup.views.fleetup_doctrines', name='auth_fleetup_doctrines'),
+                       url(r'^fleetup/characters/$', 'fleetup.views.fleetup_characters', name='auth_fleetup_characters'),
+                       url(r'^fleetup/doctrines/(?P<doctrinenumber>[0-9]+)/$', 'fleetup.views.fleetup_doctrine'),
 
                        # Sig Tracker
                        url(r'^sigtracker/$', 'sigtracker.views.sigtracker_view', name='auth_signature_view'),

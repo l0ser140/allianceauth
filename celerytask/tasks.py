@@ -11,6 +11,7 @@ from services.managers.phpbb3_manager import Phpbb3Manager
 from services.managers.ipboard_manager import IPBoardManager
 from services.managers.teamspeak3_manager import Teamspeak3Manager
 from services.managers.discord_manager import DiscordManager, DiscordAPIManager
+from services.managers.discourse_manager import DiscourseManager
 from services.managers.smf_manager import smfManager
 from services.models import AuthTS
 from services.models import TSgroup
@@ -180,6 +181,26 @@ def update_discord_groups(pk):
         logger.exception("Discord group sync failed for %s, retrying in 10 mins" % user)
         raise self.retry(countdown = 60 * 10)
     logger.debug("Updated user %s discord groups." % user)
+
+@task
+def update_discourse_groups(pk):
+    user = User.objects.get(pk=pk)
+    logger.debug("Updating discourse groups for user %s" % user)
+    authserviceinfo = AuthServicesInfo.objects.get(user=user)
+    groups = []
+    for group in user.groups.all():
+        groups.append(str(group.name))
+    if len(groups) == 0:
+        logger.debug("No syncgroups found for user. Adding empty group.")
+        groups.append('empty')
+    logger.debug("Updating user %s discord groups to %s" % (user, groups))
+    try:
+        DiscourseManager.update_groups(authserviceinfo.discourse_username, groups)
+    except:
+        logger.warn("Discourse group sync failed for %s, retrying in 10 mins" % user, exc_info=True)
+        raise self.retry(countdown = 60 * 10)
+    logger.debug("Updated user %s discord groups." % user)
+
 
 def assign_corp_group(auth):
     corp_group = None
@@ -644,7 +665,7 @@ def run_corp_update():
                     corp.save()
             else:
                 if corp.alliance:
-                    if corp.alliance.is_blue is False:
+                    if not corp.alliance.is_blue:
                         logger.info("Corp %s and its alliance %s are no longer blue" % (corp, corp.alliance))
                         corp.is_blue = False
                         corp.save()
@@ -656,22 +677,22 @@ def run_corp_update():
         # delete unnecessary alliance models
         for alliance in EveAllianceInfo.objects.filter(is_blue=False):
             logger.debug("Checking to delete alliance %s" % alliance)
-            if settings.IS_CORP is False:
-                if alliance.alliance_id == settings.ALLIANCE_ID is False:
+            if not settings.IS_CORP:
+                if not alliance.alliance_id == settings.ALLIANCE_ID:
                     logger.info("Deleting unnecessary alliance model %s" % alliance)
                     alliance.delete()
             else:
-                if alliance.evecorporationinfo_set.filter(corporation_id=settings.CORP_ID).exists() is False:
+                if not alliance.evecorporationinfo_set.filter(corporation_id=settings.CORP_ID).exists():
                     logger.info("Deleting unnecessary alliance model %s" % alliance)
                     alliance.delete()
 
         # delete unnecessary corp models
         for corp in EveCorporationInfo.objects.filter(is_blue=False):
             logger.debug("Checking to delete corp %s" % corp)
-            if settings.IS_CORP is False:
+            if not settings.IS_CORP:
                 if corp.alliance:
                     logger.debug("Corp %s has alliance %s" % (corp, corp.alliance))
-                    if corp.alliance.alliance_id == settings.ALLIANCE_ID is False:
+                    if not corp.alliance.alliance_id == settings.ALLIANCE_ID:
                         logger.info("Deleting unnecessary corp model %s" % corp)
                         corp.delete()
                 else:
@@ -682,7 +703,7 @@ def run_corp_update():
                     logger.debug("Corp %s is not owning corp" % corp)
                     if corp.alliance:
                         logger.debug("Corp %s has alliance %s" % (corp, corp.alliance))
-                        if corp.alliance.evecorporationinfo_set.filter(corporation_id=settings.CORP_ID).exists() is False:
+                        if not corp.alliance.evecorporationinfo_set.filter(corporation_id=settings.CORP_ID).exists():
                             logger.info("Deleting unnecessary corp model %s" % corp)
                             corp.delete()
                     else:

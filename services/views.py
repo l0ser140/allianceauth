@@ -14,9 +14,11 @@ from managers.mumble_manager import MumbleManager
 from managers.ipboard_manager import IPBoardManager
 from managers.teamspeak3_manager import Teamspeak3Manager
 from managers.discord_manager import DiscordManager
+from managers.discourse_manager import DiscourseManager
 from managers.ips4_manager import Ips4Manager
 from managers.smf_manager import smfManager
 from managers.market_manager import marketManager
+from managers.pathfinder_manager import pathfinderManager
 from authentication.managers import AuthServicesInfoManager
 from eveonline.managers import EveManager
 from celerytask.tasks import update_jabber_groups
@@ -26,6 +28,7 @@ from celerytask.tasks import update_ipboard_groups
 from celerytask.tasks import update_smf_groups
 from celerytask.tasks import update_teamspeak3_groups
 from celerytask.tasks import update_discord_groups
+from celerytask.tasks import update_discourse_groups
 from forms import JabberBroadcastForm
 from forms import FleetFormatterForm
 from forms import DiscordForm
@@ -134,12 +137,7 @@ def activate_forum(request):
     # Valid now we get the main characters
     character = EveManager.get_character_by_id(authinfo.main_char_id)
     logger.debug("Adding phpbb user for user %s with main character %s" % (request.user, character))
-    groups = []
-    for group in request.user.groups.all():
-        groups.append(str(group.name))
-    if len(groups) == 0:
-        groups.append('empty')
-    result = Phpbb3Manager.add_user(character.character_name, request.user.email, groups, authinfo.main_char_id)
+    result = Phpbb3Manager.add_user(character.character_name, request.user.email, ['REGISTERED'], authinfo.main_char_id)
     # if empty we failed
     if result[0] != "":
         AuthServicesInfoManager.update_user_forum_info(result[0], result[1], request.user)
@@ -612,7 +610,38 @@ def set_ipboard_password(request):
     logger.debug("Rendering form for user %s" % request.user)
     context = {'form': form, 'service': 'IPBoard', 'error': error}
     return render_to_response('registered/service_password.html', context, context_instance=RequestContext(request))
+    
+@login_required
+@user_passes_test(service_blue_alliance_test)
+def activate_discourse(request):
+    logger.debug("activate_discourse called by user %s" % request.user)
+    authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
+    character = EveManager.get_character_by_id(authinfo.main_char_id)
+    logger.debug("Adding discourse user for user %s with main character %s" % (request.user, character))
+    result = DiscourseManager.add_user(character.character_name, request.user.email)
+    if result[0] != "":
+        AuthServicesInfoManager.update_user_discourse_info(result[0], result[1], request.user)
+        logger.debug("Updated authserviceinfo for user %s with discourse credentials. Updating groups." % request.user)
+        update_discourse_groups.delay(request.user.pk)
+        logger.info("Successfully activated discourse for user %s" % request.user)
+        return HttpResponseRedirect("/services/")
+    logger.error("Unsuccessful attempt to activate forum for user %s" % request.user)
+    return HttpResponseRedirect("/dashboard")
 
+
+@login_required
+@user_passes_test(service_blue_alliance_test)
+def deactivate_discourse(request):
+    logger.debug("deactivate_discourse called by user %s" % request.user)
+    authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
+    result = DiscourseManager.delete_user(authinfo.discourse_username)
+    if result:
+        AuthServicesInfoManager.update_user_discourse_info("", "", request.user)
+        logger.info("Successfully deactivated discourse for user %s" % request.user)
+        return HttpResponseRedirect("/services/")
+    logger.error("Unsuccessful attempt to activate discourse for user %s" % request.user)
+    return HttpResponseRedirect("/dashboard")
+    
 @login_required
 @user_passes_test(service_blue_alliance_test)
 def activate_ips4(request):
@@ -849,4 +878,83 @@ def set_market_password(request):
 
     logger.debug("Rendering form for user %s" % request.user)
     context = {'form': form, 'service': 'Market'}
+    return render_to_response('registered/service_password.html', context, context_instance=RequestContext(request))
+
+@login_required
+@user_passes_test(service_blue_alliance_test)
+def activate_pathfinder(request):
+    logger.debug("activate_pathfinder called by user %s" % request.user)
+    authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
+    # Valid now we get the main characters
+    character = EveManager.get_character_by_id(authinfo.main_char_id)
+    logger.debug("Adding pathfinder for user %s with main character %s" % (request.user, character))
+    result = pathfinderManager.add_user(character.character_name, request.user.email, character.character_name)
+    # if empty we failed
+    if result[0] != "":
+        AuthServicesInfoManager.update_user_pathfinder_info(result[0], result[1], request.user)
+        logger.debug("Updated authserviceinfo for user %s with pathfinder credentials." % request.user)
+        logger.info("Succesfully activated pathfinder for user %s" % request.user)
+        return HttpResponseRedirect("/services/")
+    logger.error("Unsuccesful attempt to activate pathfinder for user %s" % request.user)
+    return HttpResponseRedirect("/dashboard")
+
+
+@login_required
+@user_passes_test(service_blue_alliance_test)
+def deactivate_pathfinder(request):
+    logger.debug("deactivate_pathfinder called by user %s" % request.user)
+    authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
+    result = pathfinderManager.disable_user(authinfo.pathfinder_username)
+    # false we failed
+    if result:
+        AuthServicesInfoManager.update_user_pathfinder_info("", "", request.user)
+        logger.info("Succesfully deactivated pathfinder for user %s" % request.user)
+        return HttpResponseRedirect("/services/")
+    logger.error("Unsuccesful attempt to activate pathfinder for user %s" % request.user)
+    return HttpResponseRedirect("/dashboard")
+
+
+@login_required
+@user_passes_test(service_blue_alliance_test)
+def reset_pathfinder_password(request):
+    logger.debug("reset_pathfinder_password called by user %s" % request.user)
+    authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
+    result = pathfinderManager.update_user_info(authinfo.pathfinder_username)
+    # false we failed
+    if result != "":
+        AuthServicesInfoManager.update_user_pathfinder_info(authinfo.pathfinder_username, result[1], request.user)
+        logger.info("Succesfully reset pathfinder password for user %s" % request.user)
+        return HttpResponseRedirect("/services/")
+    logger.error("Unsuccessful attempt to reset pathfinder password for user %s" % request.user)
+    return HttpResponseRedirect("/dashboard")
+
+@login_required
+@user_passes_test(service_blue_alliance_test)
+def set_pathfinder_password(request):
+    logger.debug("set_pathfinder_password called by user %s" % request.user)
+    error = None
+    if request.method == 'POST':
+        logger.debug("Received POST request with form.")
+        form = ServicePasswordForm(request.POST)
+        logger.debug("Form is valid: %s" % form.is_valid())
+        if form.is_valid():
+            password = form.cleaned_data['password']
+            logger.debug("Form contains password of length %s" % len(password))
+            authinfo = AuthServicesInfoManager.get_auth_service_info(request.user)
+            result = pathfinderManager.update_custom_password(authinfo.pathfinder_username, password)
+            if result != "":
+                AuthServicesInfoManager.update_user_pathfinder_info(authinfo.pathfinder_username, result, request.user)
+                logger.info("Succesfully reset pathfinder password for user %s" % request.user)
+                return HttpResponseRedirect("/services/")
+            else:
+                logger.error("Failed to install custom pathfinder password for user %s" % request.user)
+                error = "Failed to install custom password."
+        else:
+            error = "Invalid password provided"
+    else:
+        logger.debug("Request is not type POST - providing empty form.")
+        form = ServicePasswordForm()
+
+    logger.debug("Rendering form for user %s" % request.user)
+    context = {'form': form, 'service': 'Pathfinder'}
     return render_to_response('registered/service_password.html', context, context_instance=RequestContext(request))
