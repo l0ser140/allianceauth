@@ -33,22 +33,6 @@ class srpManager():
         else:
             raise ValueError("Invalid Kill ID")
 
-    @staticmethod
-    def get_ship_name (ship_type):
-        url = ("https://jetbalsa.com/api/json.php/invTypes/%s" % ship_type)
-        request = urllib2.Request(url)
-        request.add_header('User-Agent',"%s Alliance Auth" % settings.DOMAIN)
-        request.add_header('Content-Type','application/json')
-        response = urllib2.urlopen(request)
-        result = json.load(response)
-        if result:
-            ship_name = result['typeName']
-            logger.debug("ship type %s determined to be %s" % (ship_type, ship_name))
-            return ship_name
-        else:
-            logger.debug("ship type %s is invalid" % ship_type)
-            raise ValueError("Cannot get ship name")
-
 
 
 
